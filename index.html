@@ -84,6 +84,8 @@ tr:hover { background: #f8fafc; }
 
 .auto-refresh-badge { animation: spin 2s linear infinite; display: inline-block; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.import-preview-list { max-height: 300px; overflow-y: auto; margin: 12px 0; }
 </style>
 </head>
 <body>
@@ -105,6 +107,8 @@ tr:hover { background: #f8fafc; }
   <div class="controls">
     <button class="btn btn-primary" onclick="openAddForm()">+ 添加比赛</button>
     <button class="btn" onclick="quickAddDemo()">📋 载入演示数据</button>
+    <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">📥 导入JSON</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
     <button class="btn" onclick="manualRefresh()">🔄 立即刷新</button>
     <button class="btn" onclick="toggleAutoRefresh()">⏯️ <span id="autoBtnText">暂停自动刷新</span></button>
     <button class="btn btn-danger btn-sm" onclick="clearAll()">🗑 清空全部</button>
@@ -218,6 +222,24 @@ tr:hover { background: #f8fafc; }
       <input type="hidden" id="f_editId">
       <button class="btn" onclick="closeForm()">取消</button>
       <button class="btn btn-primary" onclick="saveMatch()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 导入预览弹窗 -->
+<div class="form-overlay" id="importPreviewOverlay">
+  <div class="form-panel">
+    <h3>📥 导入比赛数据</h3>
+    <div id="importPreviewContent" style="margin:8px 0;"></div>
+    <div style="font-size:12px;color:#64748b;margin:8px 0;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="importReplace">
+        替换现有数据 (不勾选则追加，自动跳过重复场次)
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="cancelImport()">取消</button>
+      <button class="btn btn-primary" onclick="confirmImport()">确认导入 <span id="importPreviewCount">0</span> 场</button>
     </div>
   </div>
 </div>
@@ -500,6 +522,141 @@ function quickAddDemo() {
   });
   saveData();
   renderTable();
+}
+
+// ===== JSON导入功能 =====
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.matches || !Array.isArray(data.matches)) {
+        alert('JSON格式不正确，需要包含 "matches" 数组。请使用抓取器生成的 match_data.json');
+        return;
+      }
+      showImportPreview(data);
+    } catch(err) {
+      alert('JSON解析失败: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  // 重置file input，允许重复导入同一文件
+  event.target.value = '';
+}
+
+function showImportPreview(data) {
+  const matchList = data.matches;
+  const fetchTime = data.fetch_time_display || data.fetch_time || '未知';
+  
+  // 构建预览HTML
+  let previewHTML = '<div class="import-preview-list">';
+  previewHTML += '<p style="font-size:12px;color:#64748b;margin-bottom:8px;">抓取时间: ' + fetchTime + ' | 共 ' + matchList.length + ' 场</p>';
+  
+  matchList.slice(0, 10).forEach(m => {
+    previewHTML += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f1f5f9;">' +
+      (m.league || '?') + ' | ' + (m.home_team || m.homeTeam || '?') + ' vs ' + (m.away_team || m.awayTeam || '?') +
+      ' | ' + (m.live_score || m.score || '-') + ' | ' + (m.match_status || m.status || '?') +
+      '</div>';
+  });
+  if (matchList.length > 10) {
+    previewHTML += '<div style="font-size:12px;padding:4px 0;color:#64748b;">... 还有 ' + (matchList.length - 10) + ' 场</div>';
+  }
+  previewHTML += '</div>';
+  
+  // 显示预览弹窗
+  const overlay = document.getElementById('importPreviewOverlay');
+  document.getElementById('importPreviewContent').innerHTML = previewHTML;
+  document.getElementById('importPreviewCount').textContent = matchList.length;
+  overlay.classList.add('active');
+  
+  // 存储待导入的数据
+  overlay._importData = data;
+}
+
+function confirmImport() {
+  const overlay = document.getElementById('importPreviewOverlay');
+  const data = overlay._importData;
+  if (!data) return;
+  
+  const replaceExisting = document.getElementById('importReplace').checked;
+  const matchList = data.matches;
+  
+  if (replaceExisting) {
+    matches = [];
+  }
+  
+  let imported = 0;
+  matchList.forEach(m => {
+    // 字段映射: 抓取器JSON → 战术板格式
+    const score = parseScore(m.live_score || m.score || '');
+    const match = {
+      minute: mapMatchMinute(m.match_time || m.time || '', m.match_status || m.status || ''),
+      league: m.league || '',
+      homeTeam: m.home_team || m.homeTeam || '',
+      awayTeam: m.away_team || m.awayTeam || '',
+      homeGoal: score.home,
+      awayGoal: score.away,
+      handicap: m.live_asian_handicap || m.handicap || '',
+      overUnder: m.live_over_under || m.overUnder || '',
+      shots: m.shots_ratio || m.shots || '',
+      shotsOn: m.shots_on_target_ratio || m.shotsOn || '',
+      dangerAttacks: m.danger_attacks_ratio || m.dangerAttacks || '',
+      xgHome: m.home_xg || m.xgHome || '',
+      xgAway: m.away_xg || m.xgAway || '',
+      createdAt: new Date().toISOString(),
+      _source: m.notes || m.source || '',
+    };
+    
+    // 跳过没有队名的
+    if (!match.homeTeam || !match.awayTeam) return;
+    
+    // 去重检查
+    const dup = matches.find(existing =>
+      existing.homeTeam === match.homeTeam && existing.awayTeam === match.awayTeam
+    );
+    if (!dup) {
+      matches.push(match);
+      imported++;
+    }
+  });
+  
+  saveData();
+  renderTable();
+  
+  overlay.classList.remove('active');
+  alert('导入完成: ' + imported + ' 场比赛 (跳过 ' + (matchList.length - imported) + ' 场重复)');
+}
+
+function cancelImport() {
+  document.getElementById('importPreviewOverlay').classList.remove('active');
+}
+
+function parseScore(scoreStr) {
+  if (!scoreStr) return { home: 0, away: 0 };
+  const parts = scoreStr.toString().trim().split(/[-:]/);
+  if (parts.length === 2) {
+    const home = parseInt(parts[0]);
+    const away = parseInt(parts[1]);
+    if (!isNaN(home) && !isNaN(away)) return { home, away };
+  }
+  return { home: 0, away: 0 };
+}
+
+function mapMatchMinute(timeStr, status) {
+  // 将比赛时间映射为分钟数或状态标识
+  if (status === '已结束' || status === 'finished') return 'FT';
+  if (status === '未开赛' || status === 'scheduled') return '0';
+  if (status === '进行中' || status === 'live') {
+    // 尝试从时间中提取分钟 (格式可能是 "HH:MM" 或 "分钟'")
+    const minMatch = timeStr.match(/(\d+)['\']?/);
+    if (minMatch) return minMatch[1];
+    return 'live';
+  }
+  return '0';
 }
 
 init();
