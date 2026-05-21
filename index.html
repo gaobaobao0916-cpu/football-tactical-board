@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实时足球战术板 · 个人驾驶舱</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #f5f5f5; color: #1a1a1a; line-height: 1.5; padding: 0;
+}
+.app { max-width: 1600px; margin: 0 auto; padding: 16px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+.header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.live-dot { width: 10px; height: 10px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.status-bar { display: flex; gap: 16px; align-items: center; font-size: 12px; color: #666; flex-wrap: wrap; }
+.status-item { background: #fff; padding: 6px 12px; border-radius: 6px; border: 1px solid #e5e5e5; white-space: nowrap; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.btn {
+  padding: 8px 16px; border: 1px solid #d4d4d4; border-radius: 8px; cursor: pointer;
+  background: #fff; font-size: 13px; font-weight: 500; transition: all 0.15s;
+  display: flex; align-items: center; gap: 4px;
+}
+.btn:hover { background: #f0f0f0; border-color: #aaa; }
+.btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+.btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+.btn-danger { color: #dc2626; border-color: #fca5a5; }
+.btn-danger:hover { background: #fef2f2; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+.table-wrap { background: #fff; border-radius: 12px; border: 1px solid #e5e5e5; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1400px; }
+th { background: #f8fafc; padding: 10px 8px; text-align: center; font-weight: 600; font-size: 12px;
+  color: #475569; border-bottom: 2px solid #e2e8f0; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+td { padding: 8px; text-align: center; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+tr:hover { background: #f8fafc; }
+.row-warn { background: #fef9c3 !important; }
+.row-warn:hover { background: #fef08a !important; }
+.row-blue { background: #dbeafe !important; }
+.row-blue:hover { background: #bfdbfe !important; }
+.row-normal { background: #fff; }
+
+.badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-warn { background: #fef9c3; color: #854d0e; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
+.badge-none { color: transparent; }
+.badge-live { background: #dcfce7; color: #166534; }
+.badge-finished { background: #f1f5f9; color: #64748b; }
+.badge-upcoming { background: #fef3c7; color: #92400e; }
+
+.match-time { font-weight: 600; color: #dc2626; }
+.score { font-weight: 700; font-size: 14px; letter-spacing: 2px; }
+.team-name { font-weight: 600; }
+.home-team { color: #1e40af; }
+.away-team { color: #64748b; }
+.stat-ratio { font-family: 'SF Mono', 'Consolas', 'Courier New', monospace; font-size: 12px; }
+.stat-high { color: #dc2626; font-weight: 600; }
+
+.form-overlay { display: none; position: fixed; inset:0; background: rgba(0,0,0,0.4); z-index: 100;
+  justify-content: center; align-items: center; }
+.form-overlay.active { display: flex; }
+.form-panel { background: #fff; border-radius: 16px; padding: 24px; width: 520px; max-width: 95vw;
+  max-height: 90vh; overflow-y: auto; }
+.form-panel h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group label { font-size: 12px; font-weight: 500; color: #475569; }
+.form-group input, .form-group select {
+  padding: 8px 10px; border: 1px solid #d4d4d4; border-radius: 6px; font-size: 13px;
+  outline: none; transition: border 0.15s;
+}
+.form-group input:focus, .form-group select:focus { border-color: #2563eb; }
+.form-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+
+.empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; }
+.empty-state h2 { font-size: 16px; margin-bottom: 8px; color: #64748b; }
+.empty-state p { font-size: 13px; }
+.help-tip { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.total-row { background: #f1f5f9; font-weight: 600; }
+.total-row td { border-top: 2px solid #e2e8f0; }
+
+.auto-refresh-badge { animation: spin 2s linear infinite; display: inline-block; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>
+      <span class="live-dot"></span>
+      实时足球战术板
+      <span style="font-size:13px;font-weight:400;color:#64748b;">个人驾驶舱 v1.0</span>
+    </h1>
+    <div class="status-bar">
+      <div class="status-item">📡 最近更新: <span id="lastUpdate">--</span></div>
+      <div class="status-item">🔄 自动刷新: <span id="refreshInterval">60秒</span></div>
+      <div class="status-item">📊 监控中: <span id="matchCount">0</span> 场</div>
+      <div class="status-item">⚠️ 预警: <span id="alertCount">0</span> 场</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" onclick="openAddForm()">+ 添加比赛</button>
+    <button class="btn" onclick="quickAddDemo()">📋 载入演示数据</button>
+    <button class="btn" onclick="manualRefresh()">🔄 立即刷新</button>
+    <button class="btn" onclick="toggleAutoRefresh()">⏯️ <span id="autoBtnText">暂停自动刷新</span></button>
+    <button class="btn btn-danger btn-sm" onclick="clearAll()">🗑 清空全部</button>
+    <select id="intervalSelect" onchange="changeInterval()" style="margin-left:auto;padding:4px 8px;border-radius:6px;border:1px solid #d4d4d4;font-size:12px;">
+      <option value="30">30秒刷新</option>
+      <option value="60" selected>60秒刷新</option>
+      <option value="120">120秒刷新</option>
+      <option value="300">5分钟刷新</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table id="matchTable">
+      <thead>
+        <tr>
+          <th>比赛时间</th>
+          <th>联赛</th>
+          <th>主队</th>
+          <th>客队</th>
+          <th>实时比分</th>
+          <th>让球盘口</th>
+          <th>大小球盘口</th>
+          <th>射门比</th>
+          <th>射正比</th>
+          <th>危险进攻比</th>
+          <th>xG (主/客)</th>
+          <th>压制判断</th>
+          <th>均衡提示</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr>
+          <td colspan="15">
+            <div class="empty-state">
+              <h2>📋 尚无比赛数据</h2>
+              <p>点击「添加比赛」录入一场比赛，或点击「载入演示数据」查看示例</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="form-overlay" id="formOverlay">
+  <div class="form-panel">
+    <h3 id="formTitle">添加比赛</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>比赛分钟 ' </label>
+        <input type="number" id="f_minute" placeholder="0-90+" min="0" max="120">
+      </div>
+      <div class="form-group">
+        <label>联赛</label>
+        <select id="f_league">
+          <option value="英超">英超</option><option value="西甲">西甲</option><option value="德甲">德甲</option>
+          <option value="意甲">意甲</option><option value="法甲">法甲</option><option value="中超">中超</option>
+          <option value="欧冠">欧冠</option><option value="欧联">欧联</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>主队</label>
+        <input type="text" id="f_home" placeholder="主队名称">
+      </div>
+      <div class="form-group">
+        <label>客队</label>
+        <input type="text" id="f_away" placeholder="客队名称">
+      </div>
+      <div class="form-group">
+        <label>主队进球</label>
+        <input type="number" id="f_homeGoal" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>客队进球</label>
+        <input type="number" id="f_awayGoal" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>让球盘口</label>
+        <input type="text" id="f_handicap" placeholder="如 -0.75 或 +0.25">
+      </div>
+      <div class="form-group">
+        <label>大小球盘口</label>
+        <input type="text" id="f_overUnder" placeholder="如 2.5">
+      </div>
+      <div class="form-group">
+        <label>射门 (主:客)</label>
+        <input type="text" id="f_shots" placeholder="如 7:2">
+      </div>
+      <div class="form-group">
+        <label>射正 (主:客)</label>
+        <input type="text" id="f_shotsOn" placeholder="如 4:1">
+      </div>
+      <div class="form-group">
+        <label>危险进攻 (主:客)</label>
+        <input type="text" id="f_dangerAttacks" placeholder="如 22:8">
+      </div>
+      <div class="form-group">
+        <label>xG 主队</label>
+        <input type="number" id="f_xgHome" placeholder="0.00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>xG 客队</label>
+        <input type="number" id="f_xgAway" placeholder="0.00" step="0.01" min="0">
+      </div>
+    </div>
+    <div class="help-tip">危险进攻比值会在录入时自动计算，用于均衡模型判断</div>
+    <div class="form-actions">
+      <input type="hidden" id="f_editId">
+      <button class="btn" onclick="closeForm()">取消</button>
+      <button class="btn btn-primary" onclick="saveMatch()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'football_tactical_board_data';
+let matches = [];
+let autoRefreshTimer = null;
+let autoRefreshEnabled = true;
+let refreshSecs = 60;
+
+function init() {
+  loadData();
+  startAutoRefresh();
+  updateStats();
+  const sel = document.getElementById('intervalSelect');
+  sel.addEventListener('change', changeInterval);
+  document.getElementById('formOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeForm();
+  });
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) matches = JSON.parse(raw);
+    else matches = [];
+  } catch(e) { matches = []; }
+  renderTable();
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(matches));
+}
+
+function parseRatio(str) {
+  if (!str || typeof str !== 'string') return null;
+  const parts = str.split(':');
+  if (parts.length !== 2) return null;
+  const home = parseFloat(parts[0].trim());
+  const away = parseFloat(parts[1].trim());
+  if (isNaN(home) || isNaN(away) || away === 0) return null;
+  return { home, away, ratio: home / away };
+}
+
+function getMatchStatus(minuteStr) {
+  const m = parseInt(minuteStr);
+  if (isNaN(m) || m === 0) return 'upcoming';
+  if (m >= 90 || minuteStr === 'FT' || minuteStr === '完赛') return 'finished';
+  return 'live';
+}
+
+function getStatusBadge(status) {
+  if (status === 'live') return '<span class="badge badge-live">进行中</span>';
+  if (status === 'finished') return '<span class="badge badge-finished">已结束</span>';
+  return '<span class="badge badge-upcoming">未开赛</span>';
+}
+
+function computeJudgment(match) {
+  let suppress = '';
+  let balanced = '';
+  const minuteNum = parseInt(match.minute) || 0;
+  const scoreStr = match.homeGoal + '-' + match.awayGoal;
+  const danger = parseRatio(match.dangerAttacks);
+  const dangerRatio = danger ? danger.ratio : 0;
+  if (scoreStr === '0-0' && dangerRatio >= 3 && minuteNum >= 20) {
+    suppress = '压制不进球';
+  }
+  if (dangerRatio > 0 && Math.abs(dangerRatio - 1) < 0.5) {
+    balanced = '数据均衡，别碰';
+  }
+  return { suppress, balanced };
+}
+
+function simulateLiveData(match) {
+  const status = getMatchStatus(match.minute);
+  if (status === 'live') {
+    const rnd = Math.random();
+    if (rnd < 0.03) {
+      match.homeGoal = (parseInt(match.homeGoal)||0) + 1;
+      match._lastEvent = '⚽ ' + match.homeTeam + ' 进球！';
+    } else if (rnd < 0.05) {
+      match.awayGoal = (parseInt(match.awayGoal)||0) + 1;
+      match._lastEvent = '⚽ ' + match.awayTeam + ' 进球！';
+    }
+  }
+  return match;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  if (matches.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="15"><div class="empty-state">
+      <h2>📋 尚无比赛数据</h2><p>点击「添加比赛」录入一场比赛，或点击「载入演示数据」查看示例</p>
+    </div></td></tr>`;
+    updateStats();
+    return;
+  }
+  let html = '';
+  let alertCount = 0;
+  matches.forEach((m, idx) => {
+    const danger = parseRatio(m.dangerAttacks);
+    const dangerDisplay = danger ? danger.home + ':' + danger.away : m.dangerAttacks || '--';
+    const dangerRatio = danger ? danger.ratio.toFixed(2) : '--';
+    const j = computeJudgment(m);
+    if (j.suppress || j.balanced) alertCount++;
+    let rowClass = 'row-normal';
+    if (j.suppress) rowClass = 'row-warn';
+    else if (j.balanced) rowClass = 'row-blue';
+    const status = getMatchStatus(m.minute);
+    const statusBadge = getStatusBadge(status);
+    const suppressHTML = j.suppress
+      ? '<span class="badge badge-warn">⚠️ ' + j.suppress + '</span>'
+      : '<span class="badge-none">-</span>';
+    const balancedHTML = j.balanced
+      ? '<span class="badge badge-blue">🔵 ' + j.balanced + '</span>'
+      : '<span class="badge-none">-</span>';
+    const xgDisplay = (m.xgHome || '0') + ' / ' + (m.xgAway || '0');
+    html += `<tr class="${rowClass}">
+      <td><span class="match-time">${m.minute}'</span></td>
+      <td>${m.league}</td>
+      <td><span class="team-name home-team">${m.homeTeam}</span></td>
+      <td><span class="team-name away-team">${m.awayTeam}</span></td>
+      <td><span class="score">${m.homeGoal}-${m.awayGoal}</span></td>
+      <td>${m.handicap}</td>
+      <td>${m.overUnder}</td>
+      <td class="stat-ratio">${m.shots || '--'}</td>
+      <td class="stat-ratio">${m.shotsOn || '--'}</td>
+      <td>
+        <span class="stat-ratio">${dangerDisplay}</span>
+        <span style="font-size:11px;color:#64748b;margin-left:4px;">(${dangerRatio})</span>
+      </td>
+      <td>${xgDisplay}</td>
+      <td>${suppressHTML}</td>
+      <td>${balancedHTML}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <button class="btn btn-sm" onclick="editMatch(${idx})">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteMatch(${idx})">删除</button>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  updateStats(alertCount);
+}
+
+function updateStats(alertCountOverride) {
+  const alertCount = alertCountOverride !== undefined ? alertCountOverride :
+    matches.filter(m => { const j = computeJudgment(m); return j.suppress || j.balanced; }).length;
+  document.getElementById('matchCount').textContent = matches.length;
+  document.getElementById('alertCount').textContent = alertCount;
+  document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-CN');
+}
+
+function openAddForm() {
+  document.getElementById('formTitle').textContent = '添加比赛';
+  document.getElementById('f_editId').value = '';
+  clearForm();
+  document.getElementById('formOverlay').classList.add('active');
+}
+
+function editMatch(idx) {
+  const m = matches[idx];
+  document.getElementById('formTitle').textContent = '编辑比赛';
+  document.getElementById('f_editId').value = idx;
+  document.getElementById('f_minute').value = m.minute;
+  document.getElementById('f_league').value = m.league;
+  document.getElementById('f_home').value = m.homeTeam;
+  document.getElementById('f_away').value = m.awayTeam;
+  document.getElementById('f_homeGoal').value = m.homeGoal;
+  document.getElementById('f_awayGoal').value = m.awayGoal;
+  document.getElementById('f_handicap').value = m.handicap || '';
+  document.getElementById('f_overUnder').value = m.overUnder || '';
+  document.getElementById('f_shots').value = m.shots || '';
+  document.getElementById('f_shotsOn').value = m.shotsOn || '';
+  document.getElementById('f_dangerAttacks').value = m.dangerAttacks || '';
+  document.getElementById('f_xgHome').value = m.xgHome || '';
+  document.getElementById('f_xgAway').value = m.xgAway || '';
+  document.getElementById('formOverlay').classList.add('active');
+}
+
+function closeForm() {
+  document.getElementById('formOverlay').classList.remove('active');
+}
+
+function clearForm() {
+  const fields = ['f_minute','f_home','f_away','f_homeGoal','f_awayGoal',
+    'f_handicap','f_overUnder','f_shots','f_shotsOn','f_dangerAttacks','f_xgHome','f_xgAway'];
+  fields.forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('f_league').value = '英超';
+}
+
+function saveMatch() {
+  const match = {
+    minute: document.getElementById('f_minute').value || '0',
+    league: document.getElementById('f_league').value,
+    homeTeam: document.getElementById('f_home').value.trim(),
+    awayTeam: document.getElementById('f_away').value.trim(),
+    homeGoal: parseInt(document.getElementById('f_homeGoal').value) || 0,
+    awayGoal: parseInt(document.getElementById('f_awayGoal').value) || 0,
+    handicap: document.getElementById('f_handicap').value.trim(),
+    overUnder: document.getElementById('f_overUnder').value.trim(),
+    shots: document.getElementById('f_shots').value.trim(),
+    shotsOn: document.getElementById('f_shotsOn').value.trim(),
+    dangerAttacks: document.getElementById('f_dangerAttacks').value.trim(),
+    xgHome: document.getElementById('f_xgHome').value || '',
+    xgAway: document.getElementById('f_xgAway').value || '',
+    createdAt: new Date().toISOString()
+  };
+  if (!match.homeTeam || !match.awayTeam) {
+    alert('请填写主队和客队名称');
+    return;
+  }
+  const editId = document.getElementById('f_editId').value;
+  if (editId !== '') {
+    matches[parseInt(editId)] = { ...matches[parseInt(editId)], ...match, updatedAt: new Date().toISOString() };
+  } else {
+    matches.push(match);
+  }
+  saveData();
+  renderTable();
+  closeForm();
+}
+
+function deleteMatch(idx) {
+  if (!confirm('确定删除这场比赛？')) return;
+  matches.splice(idx, 1);
+  saveData();
+  renderTable();
+}
+
+function clearAll() {
+  if (!confirm('确定清空全部比赛数据？此操作不可恢复！')) return;
+  matches = [];
+  saveData();
+  renderTable();
+}
+
+function manualRefresh() {
+  updateStats();
+  renderTable();
+}
+
+function toggleAutoRefresh() {
+  autoRefreshEnabled = !autoRefreshEnabled;
+  document.getElementById('autoBtnText').textContent = autoRefreshEnabled ? '暂停自动刷新' : '恢复自动刷新';
+  if (autoRefreshEnabled) startAutoRefresh();
+  else clearInterval(autoRefreshTimer);
+}
+
+function changeInterval() {
+  refreshSecs = parseInt(document.getElementById('intervalSelect').value);
+  document.getElementById('refreshInterval').textContent = refreshSecs + '秒';
+  if (autoRefreshEnabled) {
+    clearInterval(autoRefreshTimer);
+    startAutoRefresh();
+  }
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    if (!autoRefreshEnabled) return;
+    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('zh-CN');
+  }, refreshSecs * 1000);
+}
+
+function quickAddDemo() {
+  if (matches.length > 0 && !confirm('当前已有数据，载入演示数据将追加到现有列表，确定继续？')) return;
+  const demos = [
+    { minute:'35', league:'英超', homeTeam:'阿森纳', awayTeam:'热刺', homeGoal:0, awayGoal:0, handicap:'-0.75', overUnder:'2.5', shots:'7:2', shotsOn:'4:1', dangerAttacks:'22:7', xgHome:'0.92', xgAway:'0.18' },
+    { minute:'52', league:'德甲', homeTeam:'多特蒙德', awayTeam:'勒沃库森', homeGoal:1, awayGoal:1, handicap:'+0.25', overUnder:'2.75', shots:'5:4', shotsOn:'3:3', dangerAttacks:'14:13', xgHome:'0.55', xgAway:'0.48' },
+    { minute:'68', league:'西甲', homeTeam:'巴塞罗那', awayTeam:'马德里竞技', homeGoal:2, awayGoal:1, handicap:'-1.0', overUnder:'3.0', shots:'9:3', shotsOn:'5:1', dangerAttacks:'28:12', xgHome:'1.85', xgAway:'0.42' },
+    { minute:'23', league:'意甲', homeTeam:'AC米兰', awayTeam:'那不勒斯', homeGoal:0, awayGoal:0, handicap:'-0.5', overUnder:'2.5', shots:'3:1', shotsOn:'1:0', dangerAttacks:'16:5', xgHome:'0.48', xgAway:'0.12' },
+    { minute:'78', league:'法甲', homeTeam:'巴黎圣日耳曼', awayTeam:'里昂', homeGoal:3, awayGoal:1, handicap:'-1.5', overUnder:'3.5', shots:'12:6', shotsOn:'7:2', dangerAttacks:'35:18', xgHome:'2.40', xgAway:'0.65' },
+    { minute:'FT', league:'中超', homeTeam:'上海海港', awayTeam:'北京国安', homeGoal:2, awayGoal:0, handicap:'-1.0', overUnder:'2.75', shots:'8:5', shotsOn:'4:2', dangerAttacks:'25:15', xgHome:'1.45', xgAway:'0.38' },
+  ];
+  demos.forEach(d => {
+    matches.push({ ...d, createdAt: new Date().toISOString() });
+  });
+  saveData();
+  renderTable();
+}
+
+init();
+</script>
+</body>
+</html>
