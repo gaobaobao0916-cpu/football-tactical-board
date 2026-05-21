@@ -31,7 +31,7 @@ body {
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 
 .table-wrap { background: #fff; border-radius: 12px; border: 1px solid #e5e5e5; overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1400px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1650px; }
 th { background: #f8fafc; padding: 10px 8px; text-align: center; font-weight: 600; font-size: 12px;
   color: #475569; border-bottom: 2px solid #e2e8f0; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
 td { padding: 8px; text-align: center; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
@@ -86,6 +86,37 @@ tr:hover { background: #f8fafc; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .import-preview-list { max-height: 300px; overflow-y: auto; margin: 12px 0; }
+
+/* ---- 滚球大球评分系统 ---- */
+.row-over-strong { border-left: 4px solid #22c55e !important; }
+.row-over-moderate { border-left: 4px solid #eab308 !important; }
+.row-over-watch { border-left: 4px solid #94a3b8 !important; }
+.row-over-skip { border-left: 4px solid #ef4444 !important; }
+
+.over-score-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; min-width: 42px; transition: transform 0.1s; }
+.over-score-badge:hover { transform: scale(1.05); }
+.over-strong { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.over-moderate { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+.over-watch { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+.over-skip { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.over-blocked { background: #fecaca; color: #7f1d1d; border: 1px solid #f87171; text-decoration: line-through; }
+
+.over-detail { font-size: 12px; line-height: 1.8; }
+.over-detail-bar { height: 6px; border-radius: 3px; background: #e5e7eb; margin: 4px 0; overflow: hidden; }
+.over-detail-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.over-detail-item { display: flex; justify-content: space-between; padding: 2px 0; }
+.over-detail-label { color: #475569; }
+.over-detail-val { font-weight: 600; }
+.over-detail-val.max { color: #16a34a; }
+.over-detail-val.high { color: #2563eb; }
+.over-detail-val.mid { color: #d97706; }
+.over-detail-val.low { color: #dc2626; }
+
+.over-terminate { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #991b1b; }
+
+@media (max-width: 768px) {
+  .over-detail { font-size: 11px; }
+}
 </style>
 </head>
 <body>
@@ -135,6 +166,8 @@ tr:hover { background: #f8fafc; }
           <th>射正比</th>
           <th>危险进攻比</th>
           <th>xG (主/客)</th>
+          <th>滚球大球评分</th>
+          <th>追大结论</th>
           <th>压制判断</th>
           <th>均衡提示</th>
           <th>状态</th>
@@ -143,7 +176,7 @@ tr:hover { background: #f8fafc; }
       </thead>
       <tbody id="tableBody">
         <tr>
-          <td colspan="15">
+          <td colspan="17">
             <div class="empty-state">
               <h2>📋 尚无比赛数据</h2>
               <p>点击「添加比赛」录入一场比赛，或点击「载入演示数据」查看示例</p>
@@ -216,6 +249,40 @@ tr:hover { background: #f8fafc; }
         <label>xG 客队</label>
         <input type="number" id="f_xgAway" placeholder="0.00" step="0.01" min="0">
       </div>
+      <div class="form-group">
+        <label>连续压制(分钟)</label>
+        <input type="number" id="f_pressureMin" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>近10分钟角球</label>
+        <input type="number" id="f_corners" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>红牌</label>
+        <select id="f_redCard">
+          <option value="">无</option>
+          <option value="home">主队</option>
+          <option value="away">客队</option>
+          <option value="both">双方</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>领先方控节奏</label>
+        <select id="f_leaderControl">
+          <option value="">无/未发生</option>
+          <option value="slowdown">明显降速</option>
+          <option value="continue">继续压制</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Live盘口变化</label>
+        <select id="f_oddsMovement">
+          <option value="">无变化/未知</option>
+          <option value="up">升盘</option>
+          <option value="stable">稳定</option>
+          <option value="down">降盘</option>
+        </select>
+      </div>
     </div>
     <div class="help-tip">危险进攻比值会在录入时自动计算，用于均衡模型判断</div>
     <div class="form-actions">
@@ -240,6 +307,17 @@ tr:hover { background: #f8fafc; }
     <div class="form-actions">
       <button class="btn" onclick="cancelImport()">取消</button>
       <button class="btn btn-primary" onclick="confirmImport()">确认导入 <span id="importPreviewCount">0</span> 场</button>
+    </div>
+  </div>
+</div>
+
+<!-- 滚球大球评分详情弹窗 -->
+<div class="form-overlay" id="overDetailOverlay" onclick="if(event.target===this)closeOverDetail()">
+  <div class="form-panel" style="width:580px;">
+    <h3 id="overDetailTitle">滚球大球评分详情</h3>
+    <div id="overDetailContent" class="over-detail"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeOverDetail()">关闭</button>
     </div>
   </div>
 </div>
@@ -298,6 +376,351 @@ function getStatusBadge(status) {
   return '<span class="badge badge-upcoming">未开赛</span>';
 }
 
+// ===== 滚球大球评分系统 v1.0 (100分制) =====
+
+function computeOverScore(m) {
+  /*
+   * 5大模块 100分制
+   * 场面压制(35) + 节奏强度(25) + Live盘口(20) + 时间结构(10) + 风险过滤(10)
+   * 终止条件: 任意触发 → 直接禁止
+   */
+  
+  // === 基础数据提取 ===
+  const minute = parseInt(m.minute) || 0;
+  const status = getMatchStatus(m.minute);
+  const danger = parseRatio(m.dangerAttacks);
+  const dangerHome = danger ? danger.home : 0;
+  const dangerAway = danger ? danger.away : 0;
+  const dangerDiff = danger ? Math.abs(dangerHome - dangerAway) : 0;
+  const dangerRatio = danger ? danger.ratio : 0;
+  
+  const shotsOn = parseRatio(m.shotsOn);
+  const shotsOnDiff = shotsOn ? Math.abs(shotsOn.home - shotsOn.away) : 0;
+  
+  const shots = parseRatio(m.shots);
+  
+  const xgHome = parseFloat(m.xgHome) || 0;
+  const xgAway = parseFloat(m.xgAway) || 0;
+  const xgTotal = xgHome + xgAway;
+  
+  const overUnder = parseFloat(m.overUnder) || 2.5;
+  
+  // 手动补充字段
+  const pressureMin = parseInt(m.pressureMin) || 0;
+  const corners = parseInt(m.corners) || 0;
+  const redCard = m.redCard || '';
+  const leaderControl = m.leaderControl || '';
+  const oddsMovement = m.oddsMovement || '';
+  
+  // === 终止条件检测 (优先级最高) ===
+  let terminated = false;
+  let terminateReasons = [];
+  
+  // 条件2: 盘口连续降盘
+  if (oddsMovement === 'down') {
+    terminated = true;
+    terminateReasons.push('盘口连续降盘');
+  }
+  
+  // 条件3: 射正停止增长 (xG极低但有大量射门 - 假压制)
+  if (xgTotal < 0.3 && shots && (shots.home + shots.away) >= 8) {
+    terminated = true;
+    terminateReasons.push('射正停止增长(假压制)');
+  }
+  
+  // 条件4: 领先方明显控节奏
+  if (leaderControl === 'slowdown') {
+    terminated = true;
+    terminateReasons.push('领先方明显控节奏');
+  }
+  
+  // 条件1: 红牌后死守
+  if (redCard !== '') {
+    terminated = true;
+    terminateReasons.push('红牌(' + (redCard === 'home' ? '主队' : redCard === 'away' ? '客队' : '双方') + ')');
+  }
+  
+  // 未开赛/已结束不评分
+  if (status !== 'live') {
+    return {
+      score: 0, maxPossible: 100,
+      breakdown: {},
+      conclusion: (status === 'finished' ? '已结束' : '未开赛'),
+      conclusionClass: 'over-watch',
+      terminated: false, terminateReasons: [],
+      details: { note: (status === 'finished' ? '比赛已结束' : '比赛未开赛') }
+    };
+  }
+  
+  // === 如果触发终止条件 ===
+  if (terminated) {
+    return {
+      score: 0, maxPossible: 100,
+      breakdown: {},
+      conclusion: '禁止追大',
+      conclusionClass: 'over-blocked',
+      terminated: true, terminateReasons,
+      details: { terminateReasons }
+    };
+  }
+  
+  let score = 0;
+  let breakdown = {};
+  
+  // ==========================================
+  // 模块1: 场面压制 (35分)
+  // ==========================================
+  let sceneScore = 0;
+  
+  // 1.1 危险进攻评分 (15分)
+  let dangerScore = 0;
+  if (dangerDiff >= 25) dangerScore = 15;
+  else if (dangerDiff >= 15) dangerScore = 10;
+  else if (dangerDiff >= 8) dangerScore = 5;
+  sceneScore += dangerScore;
+  breakdown['危险进攻差'] = [dangerDiff, dangerScore, 15];
+  
+  // 1.2 射正评分 (10分)
+  let shotsOnScore = 0;
+  if (shotsOnDiff >= 5) shotsOnScore = 10;
+  else if (shotsOnDiff >= 3) shotsOnScore = 7;
+  else if (shotsOnDiff >= 1) shotsOnScore = 3;
+  sceneScore += shotsOnScore;
+  breakdown['射正差'] = [shotsOnDiff, shotsOnScore, 10];
+  
+  // 1.3 xG评分 (10分)
+  let xgScore = 0;
+  if (xgTotal >= 2.0) xgScore = 10;
+  else if (xgTotal >= 1.5) xgScore = 7;
+  else if (xgTotal >= 1.0) xgScore = 4;
+  sceneScore += xgScore;
+  breakdown['xG总值'] = [xgTotal, xgScore, 10];
+  
+  score += sceneScore;
+  
+  // ==========================================
+  // 模块2: 节奏强度 (25分)
+  // ==========================================
+  let rhythmScore = 0;
+  
+  // 2.1 连续压制时间 (10分) - 手动
+  let pressureScore = 0;
+  if (pressureMin >= 12) pressureScore = 10;
+  else if (pressureMin >= 8) pressureScore = 7;
+  else if (pressureMin >= 5) pressureScore = 4;
+  rhythmScore += pressureScore;
+  breakdown['连续压制'] = [pressureMin + 'min', pressureScore, 10];
+  
+  // 2.2 攻防转换速度 (8分) - 用危险进攻比近似
+  let transitionScore = 0;
+  if (dangerRatio >= 2.5 || dangerRatio <= 0.4) {
+    transitionScore = 8;  // 单边持续压制 → 高速转换
+  } else if (dangerRatio >= 1.5 || dangerRatio <= 0.67) {
+    transitionScore = 6;  // 单边压制
+  } else if (dangerRatio > 0) {
+    transitionScore = 2;
+  }
+  rhythmScore += transitionScore;
+  breakdown['攻防转换'] = ['比' + (dangerRatio ? dangerRatio.toFixed(1) : '?'), transitionScore, 8];
+  
+  // 2.3 角球压力 (7分) - 手动
+  let cornerScore = 0;
+  if (corners >= 4) cornerScore = 7;
+  else if (corners >= 2) cornerScore = 4;
+  rhythmScore += cornerScore;
+  breakdown['角球(10min)'] = [corners + '个', cornerScore, 7];
+  
+  score += rhythmScore;
+  
+  // ==========================================
+  // 模块3: Live盘口 (20分)
+  // ==========================================
+  let oddsScore = 0;
+  
+  // 3.1 盘口稳定/升降 (15分)
+  let oddsStabilityScore = 0;
+  let oddsStabilityLabel = '';
+  
+  // 用 dangerRatio + oddsMovement 组合判断
+  const isHighRhythm = (dangerRatio >= 2.0 || dangerRatio <= 0.5) && dangerDiff >= 10;
+  
+  if (isHighRhythm && oddsMovement === 'up') {
+    oddsStabilityScore = 15;
+    oddsStabilityLabel = '快节奏+升盘';
+  } else if (isHighRhythm && oddsMovement === 'stable') {
+    oddsStabilityScore = 10;
+    oddsStabilityLabel = '快节奏+稳定';
+  } else if (isHighRhythm && oddsMovement === 'down') {
+    oddsStabilityScore = -10;
+    oddsStabilityLabel = '快节奏但降盘⚠';
+  } else if (isHighRhythm && oddsMovement === '') {
+    oddsStabilityScore = 5;
+    oddsStabilityLabel = '快节奏(盘口未知)';
+  }
+  oddsScore += Math.max(-10, oddsStabilityScore);
+  breakdown['盘口方向'] = [oddsStabilityLabel || '-', Math.max(-10, oddsStabilityScore), 15];
+  
+  // 3.2 大球水位 (5分) - 手动/近似
+  let waterScore = 0;
+  if (oddsMovement === 'up') waterScore = 5;
+  else if (oddsMovement === 'stable') waterScore = 3;
+  oddsScore += waterScore;
+  breakdown['水位变化'] = [oddsMovement === 'up' ? '升至0.80↓' : oddsMovement === 'stable' ? '稳定' : '-', waterScore, 5];
+  
+  score += oddsScore;
+  
+  // ==========================================
+  // 模块4: 时间结构 (10分)
+  // ==========================================
+  let timeScore = 0;
+  if (minute >= 20 && minute <= 35) {
+    timeScore = 5;
+    breakdown['时间窗口'] = [minute + "' 最佳追大期", 5, 10];
+  } else if (minute >= 50 && minute <= 70) {
+    timeScore = 5;
+    breakdown['时间窗口'] = [minute + "' 最佳追大期", 5, 10];
+  } else if (minute > 70) {
+    timeScore = 2;
+    breakdown['时间窗口'] = [minute + "' 末段(谨慎)", 2, 10];
+  } else {
+    breakdown['时间窗口'] = [minute + "' 非最佳期", 0, 10];
+  }
+  score += timeScore;
+  
+  // ==========================================
+  // 模块5: 风险过滤 (10分)
+  // ==========================================
+  let riskScore = 0;
+  
+  // 5.1 红牌过滤 (-15)
+  let redCardScore = 0;
+  if (redCard !== '') {
+    redCardScore = -15;
+    riskScore += redCardScore;
+  }
+  breakdown['红牌影响'] = [redCard || '无', redCardScore, 0];
+  
+  // 5.2 领先方控节奏 (-10)
+  let leaderScore = 0;
+  if (leaderControl === 'slowdown') leaderScore = -10;
+  else if (leaderControl === 'continue') leaderScore = 5;
+  riskScore += leaderScore;
+  breakdown['领先方节奏'] = [leaderControl === 'slowdown' ? '明显降速' : leaderControl === 'continue' ? '继续压制' : '-', leaderScore, 0];
+  
+  // 5.3 假压制识别 (-10)
+  let fakeScore = 0;
+  const totalShots = shots ? (shots.home + shots.away) : 0;
+  if (xgTotal < 0.8 && totalShots >= 8) {
+    fakeScore = -10;
+  }
+  riskScore += fakeScore;
+  breakdown['假压制检测'] = [(fakeScore < 0 ? 'xG<' + xgTotal.toFixed(1) + '但射门' + totalShots : '正常'), fakeScore, 0];
+  
+  // 5.4 基本风险保底 (10分封顶)
+  riskScore = Math.max(-10, riskScore + 10);
+  score += riskScore;
+  
+  // === 最终得分 (封顶100, 保底0) ===
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  
+  // === 结论判断 ===
+  let conclusion, conclusionClass;
+  if (score >= 75) { conclusion = '强追大球'; conclusionClass = 'over-strong'; }
+  else if (score >= 60) { conclusion = '可轻仓'; conclusionClass = 'over-moderate'; }
+  else if (score >= 45) { conclusion = '观望'; conclusionClass = 'over-watch'; }
+  else { conclusion = '放弃'; conclusionClass = 'over-skip'; }
+  
+  // 额外终止条件: 80分钟后追3球大
+  if (minute > 80 && overUnder >= 3.0 && score >= 60) {
+    conclusion = '观望(80min+)';
+    conclusionClass = 'over-watch';
+  }
+  
+  return {
+    score, maxPossible: 100,
+    breakdown,
+    sceneScore, rhythmScore, oddsScore, timeScore, riskScore,
+    conclusion, conclusionClass,
+    terminated: false, terminateReasons: [],
+    details: {
+      dangerDiff, shotsOnDiff, xgTotal, dangerRatio,
+      minute, overUnder, pressureMin, corners,
+      oddsMovement, redCard, leaderControl
+    }
+  };
+}
+
+function showOverDetail(idx) {
+  const m = matches[idx];
+  const result = computeOverScore(m);
+  
+  let html = '';
+  
+  if (result.details.note) {
+    html = '<p style="text-align:center;color:#94a3b8;">' + result.details.note + '</p>';
+  } else if (result.terminated) {
+    html = '<div class="over-terminate"><strong>⛔ 触发终止条件:</strong><br/>';
+    result.terminateReasons.forEach(r => { html += '• ' + r + '<br/>'; });
+    html += '</div>';
+  } else {
+    // 总分明细
+    const modules = [
+      ['场面压制', result.sceneScore, 35, '#22c55e'],
+      ['节奏强度', result.rhythmScore, 25, '#3b82f6'],
+      ['Live盘口', result.oddsScore, 20, '#f59e0b'],
+      ['时间结构', result.timeScore, 10, '#8b5cf6'],
+      ['风险过滤', result.riskScore, 10, '#ef4444'],
+    ];
+    
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">';
+    html += '<div class="over-score-badge ' + result.conclusionClass + '" style="font-size:24px;padding:8px 16px;">' + result.score + '</div>';
+    html += '<div><strong style="font-size:16px;">' + (result.conclusionClass === 'over-strong' ? '✅ ' : result.conclusionClass === 'over-moderate' ? '🟡 ' : result.conclusionClass === 'over-watch' ? '⚪ ' : '🔴 ') + result.conclusion + '</strong>';
+    html += '<br/><span style="font-size:11px;color:#64748b;">满分100分 · ' + m.homeTeam + ' vs ' + m.awayTeam + '</span></div>';
+    html += '</div>';
+    
+    // 模块进度条
+    modules.forEach(([name, val, max, color]) => {
+      const pct = Math.round(val / max * 100);
+      html += '<div class="over-detail-item"><span class="over-detail-label">' + name + ' (' + max + '分)</span>';
+      html += '<span class="over-detail-val" style="color:' + color + '">' + val + '/' + max + '</span></div>';
+      html += '<div class="over-detail-bar"><div class="over-detail-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>';
+    });
+    
+    html += '<hr style="margin:8px 0;border-color:#e5e7eb;">';
+    
+    // 明细表
+    const items = result.breakdown;
+    Object.keys(items).forEach(k => {
+      const [raw, score, max] = items[k];
+      const sc = parseInt(score) || 0;
+      let cls = 'low';
+      if (sc >= max * 0.8 && max > 0) cls = 'max';
+      else if (sc >= max * 0.5 && max > 0) cls = 'high';
+      else if (sc > 0) cls = 'mid';
+      
+      html += '<div class="over-detail-item">';
+      html += '<span class="over-detail-label">  ' + k + '</span>';
+      html += '<span style="font-size:11px;color:#94a3b8;">' + raw + '</span>';
+      html += '<span class="over-detail-val ' + cls + '">' + (sc >= 0 ? '+' : '') + sc + (max > 0 ? '/' + max : '') + '</span>';
+      html += '</div>';
+    });
+    
+    // 口诀提示
+    html += '<hr style="margin:8px 0;border-color:#e5e7eb;">';
+    html += '<div style="font-size:11px;color:#64748b;text-align:center;">';
+    html += '🔑 真大球: 压制持续 + xG真实 + 盘口不退 | 假大球: 热闹多 + xG低 + 盘口降';
+    html += '</div>';
+  }
+  
+  document.getElementById('overDetailTitle').textContent = '滚球大球评分 · ' + m.homeTeam + ' vs ' + m.awayTeam;
+  document.getElementById('overDetailContent').innerHTML = html;
+  document.getElementById('overDetailOverlay').classList.add('active');
+}
+
+function closeOverDetail() {
+  document.getElementById('overDetailOverlay').classList.remove('active');
+}
+
 function computeJudgment(match) {
   let suppress = '';
   let balanced = '';
@@ -332,7 +755,7 @@ function simulateLiveData(match) {
 function renderTable() {
   const tbody = document.getElementById('tableBody');
   if (matches.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="15"><div class="empty-state">
+    tbody.innerHTML = `<tr><td colspan="17"><div class="empty-state">
       <h2>📋 尚无比赛数据</h2><p>点击「添加比赛」录入一场比赛，或点击「载入演示数据」查看示例</p>
     </div></td></tr>`;
     updateStats();
@@ -346,9 +769,17 @@ function renderTable() {
     const dangerRatio = danger ? danger.ratio.toFixed(2) : '--';
     const j = computeJudgment(m);
     if (j.suppress || j.balanced) alertCount++;
+    
+    const overResult = computeOverScore(m);
+    if (overResult.conclusion === '强追大球' || overResult.conclusion === '可轻仓') alertCount++;
+    
     let rowClass = 'row-normal';
     if (j.suppress) rowClass = 'row-warn';
     else if (j.balanced) rowClass = 'row-blue';
+    else if (overResult.conclusionClass === 'over-strong') rowClass += ' row-over-strong';
+    else if (overResult.conclusionClass === 'over-moderate') rowClass += ' row-over-moderate';
+    else if (overResult.conclusionClass === 'over-skip') rowClass += ' row-over-skip';
+    else if (overResult.conclusionClass === 'over-blocked') rowClass += ' row-over-skip';
     const status = getMatchStatus(m.minute);
     const statusBadge = getStatusBadge(status);
     const suppressHTML = j.suppress
@@ -358,6 +789,14 @@ function renderTable() {
       ? '<span class="badge badge-blue">🔵 ' + j.balanced + '</span>'
       : '<span class="badge-none">-</span>';
     const xgDisplay = (m.xgHome || '0') + ' / ' + (m.xgAway || '0');
+    
+    const overScoreHTML = (status === 'live')
+      ? '<span class="over-score-badge ' + overResult.conclusionClass + '" onclick="showOverDetail(' + idx + ')" title="点击查看评分详情">' + overResult.score + '</span>'
+      : '<span style="color:#94a3b8;">--</span>';
+    const overConclusionHTML = (status === 'live')
+      ? '<strong style="font-size:12px;color:' + (overResult.conclusionClass === 'over-strong' ? '#166534' : overResult.conclusionClass === 'over-moderate' ? '#854d0e' : overResult.conclusionClass === 'over-skip' ? '#991b1b' : '#64748b') + ';">' + overResult.conclusion + '</strong>'
+      : '<span style="color:#94a3b8;">--</span>';
+    
     html += `<tr class="${rowClass}">
       <td><span class="match-time">${m.minute}'</span></td>
       <td>${m.league}</td>
@@ -373,6 +812,8 @@ function renderTable() {
         <span style="font-size:11px;color:#64748b;margin-left:4px;">(${dangerRatio})</span>
       </td>
       <td>${xgDisplay}</td>
+      <td>${overScoreHTML}</td>
+      <td>${overConclusionHTML}</td>
       <td>${suppressHTML}</td>
       <td>${balancedHTML}</td>
       <td>${statusBadge}</td>
@@ -418,6 +859,11 @@ function editMatch(idx) {
   document.getElementById('f_dangerAttacks').value = m.dangerAttacks || '';
   document.getElementById('f_xgHome').value = m.xgHome || '';
   document.getElementById('f_xgAway').value = m.xgAway || '';
+  document.getElementById('f_pressureMin').value = m.pressureMin || '';
+  document.getElementById('f_corners').value = m.corners || '';
+  document.getElementById('f_redCard').value = m.redCard || '';
+  document.getElementById('f_leaderControl').value = m.leaderControl || '';
+  document.getElementById('f_oddsMovement').value = m.oddsMovement || '';
   document.getElementById('formOverlay').classList.add('active');
 }
 
@@ -427,9 +873,13 @@ function closeForm() {
 
 function clearForm() {
   const fields = ['f_minute','f_home','f_away','f_homeGoal','f_awayGoal',
-    'f_handicap','f_overUnder','f_shots','f_shotsOn','f_dangerAttacks','f_xgHome','f_xgAway'];
+    'f_handicap','f_overUnder','f_shots','f_shotsOn','f_dangerAttacks','f_xgHome','f_xgAway',
+    'f_pressureMin','f_corners'];
   fields.forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('f_league').value = '英超';
+  document.getElementById('f_redCard').value = '';
+  document.getElementById('f_leaderControl').value = '';
+  document.getElementById('f_oddsMovement').value = '';
 }
 
 function saveMatch() {
@@ -447,6 +897,11 @@ function saveMatch() {
     dangerAttacks: document.getElementById('f_dangerAttacks').value.trim(),
     xgHome: document.getElementById('f_xgHome').value || '',
     xgAway: document.getElementById('f_xgAway').value || '',
+    pressureMin: document.getElementById('f_pressureMin').value || '',
+    corners: document.getElementById('f_corners').value || '',
+    redCard: document.getElementById('f_redCard').value,
+    leaderControl: document.getElementById('f_leaderControl').value,
+    oddsMovement: document.getElementById('f_oddsMovement').value,
     createdAt: new Date().toISOString()
   };
   if (!match.homeTeam || !match.awayTeam) {
@@ -607,6 +1062,11 @@ function confirmImport() {
       dangerAttacks: m.danger_attacks_ratio || m.dangerAttacks || '',
       xgHome: m.home_xg || m.xgHome || '',
       xgAway: m.away_xg || m.xgAway || '',
+      pressureMin: m.pressureMin || '',
+      corners: m.corners || '',
+      redCard: m.redCard || '',
+      leaderControl: m.leaderControl || '',
+      oddsMovement: m.oddsMovement || '',
       createdAt: new Date().toISOString(),
       _source: m.notes || m.source || '',
     };

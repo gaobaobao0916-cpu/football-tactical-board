@@ -7,6 +7,6 @@ echo ============================================
 echo.
 echo Starting local server...
 echo.
-start "" http://localhost:8765/index.html
-"C:\Program Files\Python311\python.exe" -m http.server 8765
+start "" http://localhost:8766/index.html
+"C:\Program Files\Python311\python.exe" -m http.server 8766
 pause
